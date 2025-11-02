@@ -48,3 +48,7 @@ def visa_agent(request):
                 "status": "error"
             }, status=400)
 
+from django.http import HttpResponse
+
+def health_check(request):
+    return HttpResponse("Server is working!")
