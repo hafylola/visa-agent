@@ -2,67 +2,93 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
 import google.generativeai as genai
+import os
 
-# Configure Gemini 
+# Configure Gemini - use your actual API key
 genai.configure(api_key='AIzaSyCIlo9aJ5KaJ5wtAeKGQaTl75rxexnTbgQ')
 
 @csrf_exempt
 def visa_agent(request):
     if request.method == 'POST':
         try:
-            # Get the message from Telex
+            # Parse the request
             data = json.loads(request.body)
-            user_message = data.get('message', '')
+            print("=== FULL REQUEST ===")
+            print(json.dumps(data, indent=2))
 
-            # Create AI prompt
+            # Extract message from Telex's nested structure
+            params = data.get('params', {})
+            message_data = params.get('message', {})
+
+            # Get the text - Telex might send it in different places
+            user_message = message_data.get('text', '')
+
+            # If no text found, try to extract from parts array
+            if not user_message and 'parts' in message_data:
+                for part in message_data['parts']:
+                    if part.get('kind') == 'text' and part.get('text'):
+                        user_message = part['text']
+                        break
+
+            print(f"EXTRACTED MESSAGE: '{user_message}'")
+
+            if not user_message:
+                return JsonResponse({
+                    "response": "{\"error\": \"No message provided\"}",
+                    "status": "error"
+                })
+
+            # STRICT PROMPT - FORCE JSON ONLY
             prompt = f"""
-USER QUERY: "{user_message}"
+            EXTRACT THE PASSPORT COUNTRY FROM THIS USER MESSAGE: "{user_message}"
 
-EXTRACT THE PASSPORT COUNTRY from the user's message and provide comprehensive visa information.
+            YOU MUST RETURN ONLY VALID JSON. NO OTHER TEXT.
 
-YOU MUST RETURN ONLY VALID JSON. NO CONVERSATION. NO QUESTIONS.
+            REQUIRED JSON FORMAT:
+            {{
+                "passport_country": "extracted passport country",
+                "visa_free": ["list of 5-10 visa-free countries"],
+                "visa_on_arrival": ["list of 5-10 visa-on-arrival countries"],
+                "visa_required": ["list of 5-10 visa-required countries"],
+                "recommendation": "brief travel advice based on visa access"
+            }}
 
-REQUIRED JSON FORMAT:
-{{
-    "passport_country": "extracted country name",
-    "visa_free": ["country1", "country2", "country3", "..."],
-    "visa_on_arrival": ["country1", "country2", "country3", "..."],
-    "visa_required": ["country1", "country2", "country3", "..."],
-    "recommendation": "brief travel advice based on visa access"
-}}
+            RULES:
+            - Extract passport country from the message
+            - Return ONLY the JSON object, no other text
+            - No conversation, no questions, no "checking" messages
+            - If multiple passports mentioned, use the first one
+            - If destination specified, focus visa info on that country
+            """
 
-CRITICAL INSTRUCTIONS:
-- Extract passport country from the message
-- Provide comprehensive lists of countries in each category
-- Return ONLY the JSON object, no other text
-- Do not say "checking" or any conversational phrases
-- If destination is specified, focus on that country's requirements
-- If no destination, provide general visa information for the passport
-"""
-
-
-
-
-
-
-
-            # Call Gemini AI
-            model = genai.GenerativeModel('gemini-2.5-pro')
+            # Call Gemini
+            model = genai.GenerativeModel('gemini-1.5-pro')
             response = model.generate_content(prompt)
 
-            # Return the AI response to Telex
+            # Clean the response - remove any markdown code blocks
+            response_text = response.text.strip()
+            if response_text.startswith('```json'):
+                response_text = response_text[7:]
+            if response_text.endswith('```'):
+                response_text = response_text[:-3]
+            response_text = response_text.strip()
+
+            print(f"AI RESPONSE: {response_text}")
+
+            # Return A2A compliant JSON
             return JsonResponse({
-                "response": response.text,
+                "response": response_text,
                 "status": "success"
             })
 
         except Exception as e:
+            print(f"ERROR: {str(e)}")
             return JsonResponse({
-                "error": f"Something went wrong: {str(e)}",
+                "response": f"{{\"error\": \"{str(e)}\"}}",
                 "status": "error"
             }, status=400)
 
-from django.http import HttpResponse
-
+# Simple health check
 def health_check(request):
-    return HttpResponse("Server is working!")
+    return JsonResponse({"status": "healthy", "service": "visa_agent"})
+
