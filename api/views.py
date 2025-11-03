@@ -16,21 +16,25 @@ def visa_agent(request):
 
             # Create AI prompt
             prompt = f"""
-            The user said: "{user_message}"
+        The user said: "{user_message}"
 
-            Extract their passport country and provide visa information.
+        Extract their passport country and provide comprehensive visa information.
 
-            Return ONLY valid JSON with this exact structure:
-            {{
-                "passport_country": "extracted country name",
-                "visa_free": ["country1", "country2", "country3"],
-                "visa_on_arrival": ["country1", "country2", "country3"],
-                "visa_required": ["country1", "country2", "country3"],
-                "recommendation": "brief travel advice"
-            }}
+Return ONLY valid JSON with this exact structure:
+{{
+    "passport_country": "extracted country name",
+    "visa_free": ["country1", "country2", "country3", "..."],
+    "visa_on_arrival": ["country1", "country2", "country3", "..."],
+    "visa_required": ["country1", "country2", "country3", "..."],
+    "recommendation": "brief travel advice"
+}}
 
-            Include comprehensive lists of countries. Be accurate.
-            """
+IMPORTANT: Do not ask follow-up questions. Just provide the visa information based on the passport.
+Include comprehensive lists of countries. Be accurate.
+"""
+
+
+
 
             # Call Gemini AI
             model = genai.GenerativeModel('gemini-2.5-pro')
