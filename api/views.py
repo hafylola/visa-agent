@@ -2,74 +2,131 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
 import google.generativeai as genai
+import os
+import uuid
+from datetime import datetime
 
-# Configure Gemini
+# Configure Gemini - use your actual API key
 genai.configure(api_key='AIzaSyCIlo9aJ5KaJ5wtAeKGQaTl75rxexnTbgQ')
 
 @csrf_exempt
 def visa_agent(request):
     if request.method == 'POST':
         try:
-            # Parse request
+            # Parse the request
             data = json.loads(request.body)
+            print("=== FULL REQUEST ===")
+            print(json.dumps(data, indent=2))
 
-            # Extract IDs (A2A requirement)
-            request_id = data.get('id', '')
-            message_id = data.get('params', {}).get('message', {}).get('messageId', '')
+            # Extract message from Telex's nested structure
+            params = data.get('params', {})
+            message_data = params.get('message', {})
 
-            # SIMPLE MESSAGE EXTRACTION (fixes concatenation issue)
-            full_text = data.get('params', {}).get('message', {}).get('text', '')
+            # Get the text - Telex might send it in different places
+            user_message = message_data.get('text', '')
 
-            # If no text found, use default for testing
-            if not full_text:
-                user_message = "Nigerian passport"
-            else:
-                # Extract last meaningful part (fixes history problem)
-                words = full_text.split()
-                if len(words) > 4:
-                    user_message = ' '.join(words[-4:])  # Last 4 words
-                else:
-                    user_message = full_text
+            # If no text found, try to extract from parts array
+            if not user_message and 'parts' in message_data:
+                for part in message_data['parts']:
+                    if part.get('kind') == 'text' and part.get('text'):
+                        user_message = part['text']
+                        break
 
-            # ULTRA-STRICT PROMPT (fixes conversational AI)
-            prompt = f"""EXTRACT PASSPORT COUNTRY FROM: "{user_message}"
+            print(f"EXTRACTED MESSAGE: '{user_message}'")
 
-OUTPUT ONLY THIS JSON, NOTHING ELSE:
+            if not user_message:
+                # Return JSON-RPC format for error too
+                return JsonResponse({
+                    "jsonrpc": "2.0",
+                    "id": data.get('id', ''),
+                    "error": {
+                        "code": -32600,
+                        "message": "No message provided"
+                    }
+                })
 
-{{
-    "passport_country": "country name",
-    "visa_free": ["country1", "country2", "country3", "country4", "country5"],
-    "visa_on_arrival": ["country1", "country2", "country3", "country4", "country5"],
-    "visa_required": ["country1", "country2", "country3", "country4", "country5"],
-    "recommendation": "one sentence advice"
-}}"""
+            # STRICT PROMPT - FORCE JSON ONLY
+            prompt = f"""
+            EXTRACT THE PASSPORT COUNTRY FROM THIS USER MESSAGE: "{user_message}"
+
+            YOU MUST RETURN ONLY VALID JSON. NO OTHER TEXT.
+
+            REQUIRED JSON FORMAT:
+            {{
+                "passport_country": "extracted passport country",
+                "visa_free": ["list of 5-10 visa-free countries"],
+                "visa_on_arrival": ["list of 5-10 visa-on-arrival countries"],
+                "visa_required": ["list of 5-10 visa-required countries"],
+                "recommendation": "brief travel advice based on visa access"
+            }}
+
+            RULES:
+            - Extract passport country from the message
+            - Return ONLY the JSON object, no other text
+            - No conversation, no questions, no "checking" messages
+            - If multiple passports mentioned, use the first one
+            - If destination specified, focus visa info on that country
+            """
 
             # Call Gemini
             model = genai.GenerativeModel('gemini-2.5-pro')
             response = model.generate_content(prompt)
 
-            # Clean response
+            # Clean the response - remove any markdown code blocks
             response_text = response.text.strip()
-            if '```json' in response_text:
-                response_text = response_text.split('```json')[1].split('```')[0].strip()
+            if response_text.startswith('```json'):
+                response_text = response_text[7:]
+            if response_text.endswith('```'):
+                response_text = response_text[:-3]
+            response_text = response_text.strip()
 
-            # Return PERFECT A2A JSON (fixes protocol issues)
+            print(f"AI RESPONSE: {response_text}")
+
+            # Generate IDs for JSON-RPC response
+            task_id = str(uuid.uuid4())
+            message_id = str(uuid.uuid4())
+            context_id = str(uuid.uuid4())
+
+            # Return CORRECT JSON-RPC 2.0 format
             return JsonResponse({
-                "id": request_id,
-                "messageId": message_id,
-                "response": response_text,
-                "status": "success"
+                "jsonrpc": "2.0",
+                "id": data.get('id', ''),
+                "result": {
+                    "id": task_id,
+                    "contextId": context_id,
+                    "status": {
+                        "state": "completed",
+                        "timestamp": datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+                        "message": {
+                            "kind": "message",
+                            "role": "agent",
+                            "parts": [
+                                {
+                                    "kind": "text",
+                                    "text": response_text
+                                }
+                            ],
+                            "messageId": message_id,
+                            "taskId": task_id
+                        }
+                    }
+                }
             })
 
         except Exception as e:
-            # Error response still follows A2A format
+            print(f"ERROR: {str(e)}")
             return JsonResponse({
+                "jsonrpc": "2.0",
                 "id": data.get('id', ''),
-                "messageId": message_id,
-                "response": "{\"error\": \"Processing failed\"}",
-                "status": "error"
-            }, status=400)
+                "error": {
+                    "code": -32000,
+                    "message": str(e)
+                }
+            })
 
+# Simple health check
 def health_check(request):
-    return JsonResponse({"status": "visa_agent_healthy"})
+    return JsonResponse({"status": "healthy", "service": "visa_agent"})
+
+
 
