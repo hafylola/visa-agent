@@ -16,22 +16,32 @@ def visa_agent(request):
 
             # Create AI prompt
             prompt = f"""
-        The user said: "{user_message}"
+USER QUERY: "{user_message}"
 
-        Extract their passport country and provide comprehensive visa information.
+EXTRACT THE PASSPORT COUNTRY from the user's message and provide comprehensive visa information.
 
-Return ONLY valid JSON with this exact structure:
+YOU MUST RETURN ONLY VALID JSON. NO CONVERSATION. NO QUESTIONS.
+
+REQUIRED JSON FORMAT:
 {{
     "passport_country": "extracted country name",
     "visa_free": ["country1", "country2", "country3", "..."],
     "visa_on_arrival": ["country1", "country2", "country3", "..."],
     "visa_required": ["country1", "country2", "country3", "..."],
-    "recommendation": "brief travel advice"
+    "recommendation": "brief travel advice based on visa access"
 }}
 
-IMPORTANT: Do not ask follow-up questions. Just provide the visa information based on the passport.
-Include comprehensive lists of countries. Be accurate.
+CRITICAL INSTRUCTIONS:
+- Extract passport country from the message
+- Provide comprehensive lists of countries in each category
+- Return ONLY the JSON object, no other text
+- Do not say "checking" or any conversational phrases
+- If destination is specified, focus on that country's requirements
+- If no destination, provide general visa information for the passport
 """
+
+
+
 
 
 
