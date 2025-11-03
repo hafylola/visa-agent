@@ -82,18 +82,20 @@ def visa_agent(request):
 
             print(f"AI RESPONSE: {response_text}")
 
-            # Generate IDs for JSON-RPC response
+            # Generate IDs with CORRECT PREFIXES
             task_id = str(uuid.uuid4())
-            message_id = str(uuid.uuid4())
             context_id = str(uuid.uuid4())
+            message_id = str(uuid.uuid4())
+            artifact_id = str(uuid.uuid4())
+            user_msg_id = str(uuid.uuid4())
 
-            # Return CORRECT JSON-RPC 2.0 format
+            # Return COMPLETE JSON-RPC 2.0 format (matches working agents)
             return JsonResponse({
                 "jsonrpc": "2.0",
                 "id": data.get('id', ''),
                 "result": {
-                    "id": task_id,
-                    "contextId": context_id,
+                    "id": f"task-{task_id}",
+                    "contextId": f"ctx-{context_id}",
                     "status": {
                         "state": "completed",
                         "timestamp": datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
@@ -103,13 +105,64 @@ def visa_agent(request):
                             "parts": [
                                 {
                                     "kind": "text",
-                                    "text": response_text
+                                    "text": response_text,
+                                    "data": None,
+                                    "file_url": None
                                 }
                             ],
-                            "messageId": message_id,
-                            "taskId": task_id
+                            "messageId": f"msg-{message_id}",
+                            "taskId": f"task-{task_id}",
+                            "metadata": None
                         }
-                    }
+                    },
+                    "artifacts": [
+                        {
+                            "artifactId": f"artifact-{artifact_id}",
+                            "name": "VisaInformation",
+                            "parts": [
+                                {
+                                    "kind": "text",
+                                    "text": response_text,
+                                    "data": None,
+                                    "file_url": None
+                                }
+                            ]
+                        }
+                    ],
+                    "history": [
+                        {
+                            "kind": "message",
+                            "role": "user",
+                            "parts": [
+                                {
+                                    "kind": "text",
+                                    "text": user_message,
+                                    "data": None,
+                                    "file_url": None
+                                }
+                            ],
+                            "messageId": f"msg-{user_msg_id}",
+                            "taskId": None,
+                            "metadata": None
+                        },
+                        {
+                            "kind": "message",
+                            "role": "agent",
+                            "parts": [
+                                {
+                                    "kind": "text",
+                                    "text": response_text,
+                                    "data": None,
+                                    "file_url": None
+                                }
+                            ],
+                            "messageId": f"msg-{message_id}",
+                            "taskId": f"task-{task_id}",
+                            "metadata": None
+                        }
+                    ],
+                    "kind": "task",
+                    "error": None
                 }
             })
 
