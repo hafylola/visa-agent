@@ -40,29 +40,24 @@ def visa_agent(request):
 
             # STRICT PROMPT - FORCE JSON ONLY
             prompt = f"""
-            EXTRACT THE PASSPORT COUNTRY FROM THIS USER MESSAGE: "{user_message}"
+EXTRACT PASSPORT FROM: "{user_message}"
 
-            YOU MUST RETURN ONLY VALID JSON. NO OTHER TEXT.
+RETURN ONLY THIS JSON. NO OTHER TEXT. NO CONVERSATION. NO QUESTIONS.
 
-            REQUIRED JSON FORMAT:
-            {{
-                "passport_country": "extracted passport country",
-                "visa_free": ["list of 5-10 visa-free countries"],
-                "visa_on_arrival": ["list of 5-10 visa-on-arrival countries"],
-                "visa_required": ["list of 5-10 visa-required countries"],
-                "recommendation": "brief travel advice based on visa access"
-            }}
+{{
+    "passport_country": "country",
+    "visa_free": ["country1", "country2", "country3", "country4", "country5"],
+    "visa_on_arrival": ["country1", "country2", "country3", "country4", "country5"],
+    "visa_required": ["country1", "country2", "country3", "country4", "country5"],
+    "recommendation": "one sentence advice"
+}}
 
-            RULES:
-            - Extract passport country from the message
-            - Return ONLY the JSON object, no other text
-            - No conversation, no questions, no "checking" messages
-            - If multiple passports mentioned, use the first one
-            - If destination specified, focus visa info on that country
-            """
+IF YOU RETURN ANYTHING ELSE BESIDES THIS EXACT JSON FORMAT, THE APPLICATION WILL CRASH.
+"""
+
 
             # Call Gemini
-            model = genai.GenerativeModel('gemini-2.5-pro')
+            model = genai.GenerativeModel('gemini-2.0-flash')
             response = model.generate_content(prompt)
 
             # Clean the response - remove any markdown code blocks
