@@ -62,7 +62,7 @@ def visa_agent(request):
             """
 
             # Call Gemini
-            model = genai.GenerativeModel('gemini-1.5-pro')
+            model = genai.GenerativeModel('gemini-2.5-pro')
             response = model.generate_content(prompt)
 
             # Clean the response - remove any markdown code blocks
